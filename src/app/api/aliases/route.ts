@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 const MAIL_SERVER = '192.168.0.59';
 const SSH_USER = 'root';
@@ -28,12 +27,6 @@ async function sshExec(command: string): Promise<{ stdout: string; stderr: strin
       resolve({ stdout, stderr, exitCode: 1 });
     });
   });
-}
-
-function generatePasswordHash(password: string): string {
-  const salt = crypto.randomBytes(16).toString('base64').slice(0, 16);
-  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('base64');
-  return `{SHA512-CRYPT}$6$${salt}$${hash}`;
 }
 
 async function listAliases(): Promise<Array<{ name: string; email: string; createdAt: string; active: boolean }>> {
@@ -73,9 +66,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { alias, password, forwardingTo } = body;
+    const { alias, forwardingTo } = body;
 
-    if (!alias || !password || !forwardingTo) {
+    if (!alias || !forwardingTo) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -85,10 +78,6 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
-    }
-
     const fullAlias = `${alias}@${DOMAIN}`;
 
     const { stdout: virtualCheck } = await sshExec(`grep -E "^${fullAlias}\\s" /etc/postfix/virtual`);
@@ -96,27 +85,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Alias already exists' }, { status: 409 });
     }
 
-    const { stdout: userCheck } = await sshExec(`grep -E "^${fullAlias}:" /etc/dovecot/users`);
-    if (userCheck.trim()) {
-      return NextResponse.json({ error: 'Alias user already exists' }, { status: 409 });
-    }
-
-    const passwordHash = generatePasswordHash(password);
-
+    // Only add to Postfix virtual (forwarding), no Dovecot user needed
     const virtualEntry = `${fullAlias} ${forwardingTo}`;
     await sshExec(`echo "${virtualEntry}" >> /etc/postfix/virtual && postmap /etc/postfix/virtual`);
 
-    const userEntry = `${fullAlias}:${passwordHash}:5000:5000::/var/vmail/${DOMAIN}/${alias}::`;
-    await sshExec(`echo "${userEntry}" >> /etc/dovecot/users`);
-
-    await sshExec(`mkdir -p /var/vmail/${DOMAIN}/${alias}/{new,cur,tmp} && chown -R vmail:vmail /var/vmail/${DOMAIN}/${alias} && chmod -R 700 /var/vmail/${DOMAIN}/${alias}`);
-
-    await sshExec('systemctl reload postfix && systemctl reload dovecot');
+    await sshExec('systemctl reload postfix');
 
     return NextResponse.json({ 
       alias,
       email: forwardingTo,
-      message: 'Alias created successfully'
+      message: 'Alias created successfully. Emails will forward to your inbox.'
     });
   } catch (error) {
     console.error('Failed to create alias:', error);

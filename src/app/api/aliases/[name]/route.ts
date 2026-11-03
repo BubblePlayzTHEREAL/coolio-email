@@ -51,14 +51,8 @@ export async function DELETE(
     // Remove from Postfix virtual file
     await sshExec(`sed -i "/^${fullAlias}\\s/d" /etc/postfix/virtual && postmap /etc/postfix/virtual`);
 
-    // Remove from Dovecot users file
-    await sshExec(`sed -i "/^${fullAlias}:/d" /etc/dovecot/users`);
-
-    // Optionally remove maildir (commented out for safety)
-    // await sshExec(`rm -rf /var/vmail/${DOMAIN}/${name}`);
-
-    // Reload services
-    await sshExec('systemctl reload postfix && systemctl reload dovecot');
+    // Reload Postfix only
+    await sshExec('systemctl reload postfix');
 
     return NextResponse.json({ message: 'Alias deleted successfully' });
   } catch (error) {

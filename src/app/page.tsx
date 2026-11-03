@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Mail, Send, Trash2, Copy, Check, Loader2, Shield, Sparkles, MessageSquare, X, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Mail, Send, Trash2, Copy, Check, Loader2, Shield, Sparkles, MessageSquare, X, Lock, Unlock } from 'lucide-react';
 
 interface Alias {
   name: string;
@@ -12,7 +12,6 @@ interface Alias {
 
 interface FormState {
   alias: string;
-  password: string;
   forwardingTo: string;
 }
 
@@ -25,12 +24,15 @@ interface ComposeState {
 
 const DEFAULT_FORWARDING = 'brody@ddylongneck.com';
 const DOMAIN = 'ddylongneck.com';
+const SITE_PASSWORD = 'coolio2026'; // In production, use env var and proper auth
 
 export default function CoolioEmailPage() {
+  const [authed, setAuthed] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
   const [aliases, setAliases] = useState<Alias[]>([]);
   const [formState, setFormState] = useState<FormState>({
     alias: '',
-    password: '',
     forwardingTo: DEFAULT_FORWARDING,
   });
   const [status, setStatus] = useState<'idle' | 'creating' | 'success' | 'error'>('idle');
@@ -45,6 +47,30 @@ export default function CoolioEmailPage() {
   });
   const [sendStatus, setSendStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [sendMessage, setSendMessage] = useState('');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('coolio-authed');
+    if (saved === 'true') {
+      setAuthed(true);
+      loadAliases();
+    }
+  }, []);
+
+  const checkAuth = () => {
+    if (passwordInput === SITE_PASSWORD) {
+      setAuthed(true);
+      localStorage.setItem('coolio-authed', 'true');
+      setAuthError('');
+      loadAliases();
+    } else {
+      setAuthError('Incorrect password');
+    }
+  };
+
+  const logout = () => {
+    setAuthed(false);
+    localStorage.removeItem('coolio-authed');
+  };
 
   const loadAliases = async () => {
     try {
@@ -74,8 +100,8 @@ export default function CoolioEmailPage() {
 
       if (res.ok) {
         setStatus('success');
-        setMessage(`Created ${data.alias}@${DOMAIN}! You can now send/receive from this address.`);
-        setFormState({ alias: '', password: '', forwardingTo: DEFAULT_FORWARDING });
+        setMessage(`Created ${data.alias}@${DOMAIN}! You can now send emails from this address.`);
+        setFormState({ alias: '', forwardingTo: DEFAULT_FORWARDING });
         loadAliases();
       } else {
         setStatus('error');
@@ -158,6 +184,61 @@ export default function CoolioEmailPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-4">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-[var(--accent)]/10 blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-[var(--info)]/10 blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        </div>
+
+        <div className="relative z-10 card-elevated w-full max-w-md p-8">
+          <div className="text-center mb-8">
+            <div className="relative p-3 rounded-xl bg-[var(--accent-soft)] w-fit mx-auto mb-4">
+              <Lock className="h-8 w-8 text-[var(--accent)]" />
+              <div className="absolute -inset-1 rounded-xl bg-[var(--accent)]/20 blur-xl" />
+            </div>
+            <h1 className="font-display text-3xl font-bold text-[var(--ink)]">Coolio Email</h1>
+            <p className="mt-2 text-[var(--ink-muted)]">Enter password to access</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="site-password" className="label">Password</label>
+              <input
+                id="site-password"
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && checkAuth()}
+                placeholder="Enter password"
+                className="input"
+                autoFocus
+              />
+            </div>
+
+            {authError && (
+              <p className="text-sm text-[var(--danger)] text-center">{authError}</p>
+            )}
+
+            <button
+              onClick={checkAuth}
+              className="btn-primary w-full"
+              disabled={!passwordInput}
+            >
+              <Unlock className="h-4 w-4" />
+              Unlock
+            </button>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-[var(--ink-subtle)]">
+            Running on <code className="font-mono text-[var(--ink)]">mail.ddylongneck.com</code>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Background glow */}
@@ -166,34 +247,22 @@ export default function CoolioEmailPage() {
         <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-[var(--info)]/10 blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
       </div>
 
-      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
-        {/* Header */}
-        <header className="mb-12 text-center page-transition">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="relative p-3 rounded-xl bg-[var(--accent-soft)]">
-              <Sparkles className="h-8 w-8 text-[var(--accent)]" />
-              <div className="absolute -inset-1 rounded-xl bg-[var(--accent)]/20 blur-xl" />
+      <header className="border-b border-[var(--border)] sticky top-0 z-40 bg-[var(--bg)]/80 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative p-2 rounded-lg bg-[var(--accent-soft)]">
+              <Sparkles className="h-6 w-6 text-[var(--accent)]" />
             </div>
+            <h1 className="font-display text-xl font-bold text-[var(--ink)]">Coolio Email</h1>
           </div>
-          <h1 className="font-display text-4xl sm:text-5xl font-bold text-[var(--ink)] tracking-tight">
-            Coolio Email
-          </h1>
-          <p className="mt-3 text-lg text-[var(--ink-muted)] max-w-2xl mx-auto">
-            Create custom <span className="font-mono text-[var(--accent)]">@ddylongneck.com</span> aliases instantly.
-            Send, receive, and reply from any name you want.
-          </p>
-          <div className="mt-6 flex items-center justify-center gap-4 text-sm text-[var(--ink-subtle)]">
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)]">
-              <Shield className="h-3.5 w-3.5 text-[var(--success)]" />
-              Your real email stays private
-            </span>
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)]">
-              <Send className="h-3.5 w-3.5 text-[var(--accent)]" />
-              Full send/receive support
-            </span>
-          </div>
-        </header>
+          <button onClick={logout} className="btn-ghost text-sm" title="Lock">
+            <Lock className="h-4 w-4" />
+            Lock
+          </button>
+        </div>
+      </header>
 
+      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Create Alias Form */}
         <section className="card-elevated p-6 sm:p-8 mb-8 page-transition" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center gap-3 mb-6">
@@ -202,63 +271,35 @@ export default function CoolioEmailPage() {
             </div>
             <div>
               <h2 className="font-display text-xl font-semibold text-[var(--ink)]">Create New Alias</h2>
-              <p className="text-sm text-[var(--ink-muted)]">Pick a name, set a password, and start emailing in seconds</p>
+              <p className="text-sm text-[var(--ink-muted)]">Pick a name and choose where emails forward</p>
             </div>
           </div>
 
           <form onSubmit={handleCreate} className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="alias" className="label">
-                  Alias Name
-                </label>
-                <div className="relative">
-                  <input
-                    id="alias"
-                    type="text"
-                    value={formState.alias}
-                    onChange={(e) => setFormState({ ...formState, alias: e.target.value.toLowerCase() })}
-                    placeholder="coolio"
-                    className="input pr-12"
-                    pattern="[a-z0-9-]+"
-                    title="Lowercase letters, numbers, and hyphens only"
-                    required
-                    disabled={status === 'creating'}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-subtle)] font-mono text-sm">
-                    @{DOMAIN}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs text-[var(--ink-subtle)]">
-                  Lowercase, numbers, hyphens only. 3-32 characters.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="password" className="label">
-                  Password
-                </label>
+            <div>
+              <label htmlFor="alias" className="label">Alias Name</label>
+              <div className="relative">
                 <input
-                  id="password"
-                  type="password"
-                  value={formState.password}
-                  onChange={(e) => setFormState({ ...formState, password: e.target.value })}
-                  placeholder="••••••••"
-                  className="input"
-                  minLength={8}
+                  id="alias"
+                  type="text"
+                  value={formState.alias}
+                  onChange={(e) => setFormState({ ...formState, alias: e.target.value.toLowerCase() })}
+                  placeholder="coolio"
+                  className="input pr-12"
+                  pattern="[a-z0-9-]+"
+                  title="Lowercase letters, numbers, and hyphens only"
                   required
                   disabled={status === 'creating'}
                 />
-                <p className="mt-1.5 text-xs text-[var(--ink-subtle)]">
-                  Min 8 chars. Used for SMTP/IMAP auth.
-                </p>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-subtle)] font-mono text-sm">
+                  @{DOMAIN}
+                </span>
               </div>
+              <p className="mt-1.5 text-xs text-[var(--ink-subtle)]">Lowercase, numbers, hyphens only. 3-32 characters.</p>
             </div>
 
             <div>
-              <label htmlFor="forwarding" className="label">
-                Forward To
-              </label>
+              <label htmlFor="forwarding" className="label">Forward To</label>
               <select
                 id="forwarding"
                 value={formState.forwardingTo}
@@ -270,15 +311,13 @@ export default function CoolioEmailPage() {
                 <option value="him@ddylongneck.com">him@ddylongneck.com</option>
                 <option value="bix@ddylongneck.com">bix@ddylongneck.com</option>
               </select>
-              <p className="mt-1.5 text-xs text-[var(--ink-subtle)]">
-                Where emails sent to this alias will be delivered.
-              </p>
+              <p className="mt-1.5 text-xs text-[var(--ink-subtle)]">Where emails sent to this alias will be delivered.</p>
             </div>
 
             <button
               type="submit"
               className="btn-primary w-full sm:w-auto"
-              disabled={status === 'creating' || !formState.alias || !formState.password}
+              disabled={status === 'creating' || !formState.alias}
             >
               {status === 'creating' ? (
                 <>
@@ -365,45 +404,19 @@ export default function CoolioEmailPage() {
 
                   <div className="space-y-3 pt-4 border-t border-[var(--border)]">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-[var(--ink-muted)]">SMTP / IMAP</span>
+                      <span className="text-sm text-[var(--ink-muted)]">Web compose</span>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => copyToClipboard(`mail.ddylongneck.com`)}
+                          onClick={() => openCompose(alias.name)}
                           className="btn-ghost text-xs px-2 py-1"
-                          title="Copy server"
                         >
-                          {copied === `mail.ddylongneck.com` ? (
-                            <Check className="h-3.5 w-3.5 text-[var(--success)]" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Compose
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid gap-2 text-sm">
-                      <div className="flex items-center justify-between text-[var(--ink-muted)]">
-                        <span>Username</span>
-                        <code className="font-mono text-[var(--ink)] bg-[var(--surface-elevated)] px-2 py-1 rounded">
-                          {alias.name}@{DOMAIN}
-                        </code>
-                      </div>
-                      <div className="flex items-center justify-between text-[var(--ink-muted)]">
-                        <span>Password</span>
-                        <code className="font-mono text-[var(--ink)] bg-[var(--surface-elevated)] px-2 py-1 rounded">
-                          {'•'.repeat(12)}
-                        </code>
-                      </div>
-                    </div>
-
                     <div className="flex items-center gap-2 pt-2">
-                      <button
-                        onClick={() => openCompose(alias.name)}
-                        className="btn-ghost flex-1"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        Compose
-                      </button>
                       <button
                         onClick={() => handleDelete(alias.name)}
                         className="btn-ghost flex-1 text-[var(--danger)] hover:bg-[color-mix(in_oklch,_var(--danger)_10%,_transparent)]"
@@ -432,12 +445,12 @@ export default function CoolioEmailPage() {
               {
                 icon: Shield,
                 title: 'Auto-configured',
-                desc: 'We instantly set up Postfix forwarding and Dovecot auth on your mail server.',
+                desc: 'We instantly set up Postfix forwarding on your mail server.',
               },
               {
                 icon: Send,
-                title: 'Use anywhere',
-                desc: 'Configure in Gmail, Outlook, Apple Mail, or any client with SMTP/IMAP.',
+                title: 'Send from web',
+                desc: 'Compose and send emails from the alias — replies go to your real inbox.',
               },
             ].map((step, i) => (
               <article key={step.title} className="card p-6 text-center group">
@@ -552,32 +565,6 @@ export default function CoolioEmailPage() {
             </div>
           </div>
         )}
-
-        {/* Connection Details */}
-        <section className="mt-12 card p-6 page-transition" style={{ animationDelay: '400ms' }}>
-          <h2 className="font-display text-lg font-semibold text-[var(--ink)] mb-4 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-[var(--accent)]" />
-            Connection Details
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-            {[
-              { label: 'IMAP Server', value: 'mail.ddylongneck.com', port: '993 (SSL)' },
-              { label: 'SMTP Server', value: 'mail.ddylongneck.com', port: '587 (STARTTLS)' },
-              { label: 'Username', value: 'youralias@ddylongneck.com', port: '' },
-              { label: 'Password', value: 'Your alias password', port: '' },
-            ].map((item) => (
-              <div key={item.label} className="p-4 bg-[var(--surface-elevated)] rounded-lg">
-                <span className="text-[var(--ink-subtle)] block mb-1">{item.label}</span>
-                <code className="font-mono text-[var(--ink)] block">{item.value}</code>
-                {item.port && <span className="text-[var(--ink-muted)] mt-1 block">{item.port}</span>}
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-sm text-[var(--ink-muted)]">
-            <strong>Tip:</strong> In Gmail, go to Settings → Accounts → "Send mail as" → Add another email address.
-            Use your alias address, mail.ddylongneck.com:587, your alias as username, and your alias password.
-          </p>
-        </section>
       </main>
 
       <footer className="border-t border-[var(--border)] py-8 mt-12">
