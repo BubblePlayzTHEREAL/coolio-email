@@ -42,6 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${spaceGrotesk.variable} ${dmSans.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground min-h-screen`}>
+        <script defer src="/_vercel/insights/script.js" />
         {children}
       </body>
     </html>
